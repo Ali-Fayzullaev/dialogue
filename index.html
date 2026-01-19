@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dialogue - Мессенджер</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Экран авторизации -->
+        <div id="auth-screen" class="screen active">
+            <div class="auth-container">
+                <div class="logo">
+                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                        <circle cx="40" cy="40" r="40" fill="url(#gradient)"/>
+                        <path d="M25 30C25 27.2386 27.2386 25 30 25H50C52.7614 25 55 27.2386 55 30V45C55 47.7614 52.7614 50 50 50H35L25 55V30Z" fill="white"/>
+                        <circle cx="33" cy="37" r="3" fill="#667eea"/>
+                        <circle cx="43" cy="37" r="3" fill="#667eea"/>
+                        <circle cx="53" cy="37" r="3" fill="#667eea"/>
+                        <defs>
+                            <linearGradient id="gradient" x1="0" y1="0" x2="80" y2="80">
+                                <stop stop-color="#667eea"/>
+                                <stop offset="1" stop-color="#764ba2"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1>Dialogue</h1>
+                <p class="subtitle">Безопасный мессенджер с авторизацией через Telegram</p>
+                
+                <div class="auth-steps">
+                    <div class="step" id="step-1">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Откройте бота в Telegram</h3>
+                            <a href="https://t.me/dialogue_messenger_bot" target="_blank" class="telegram-btn">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161c-.18 1.897-.962 6.502-1.359 8.627-.168.9-.5 1.201-.82 1.23-.697.064-1.226-.461-1.901-.903-1.056-.692-1.653-1.123-2.678-1.799-1.185-.781-.417-1.21.258-1.911.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.139-5.062 3.345-.479.329-.913.489-1.302.481-.428-.009-1.252-.242-1.865-.442-.751-.244-1.349-.374-1.297-.789.027-.216.324-.437.893-.663 3.498-1.524 5.831-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635.099-.002.321.023.465.141.121.099.154.232.17.325.015.093.034.305.019.471z"/>
+                                </svg>
+                                Открыть @dialogue_messenger_bot
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="step" id="step-2">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Нажмите /start и получите код</h3>
+                            <p>Бот отправит вам 6-значный код</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step" id="step-3">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Введите код здесь</h3>
+                            <div class="code-input-container">
+                                <input type="text" id="auth-code" maxlength="6" placeholder="000000" autocomplete="off">
+                                <button id="verify-btn" class="verify-btn">Войти</button>
+                            </div>
+                            <p class="error-message" id="auth-error"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Главный экран мессенджера -->
+        <div id="main-screen" class="screen">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Dialogue</h2>
+                    <button id="new-chat-btn" class="icon-btn" title="Новый чат">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="search-container">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input type="text" id="search-input" placeholder="Поиск...">
+                </div>
+                
+                <div class="chats-list" id="chats-list">
+                    <!-- Чаты будут добавлены через JS -->
+                </div>
+                
+                <div class="user-panel">
+                    <div class="user-avatar" id="user-avatar">
+                        <span id="user-initials">?</span>
+                    </div>
+                    <div class="user-info">
+                        <span class="user-name" id="user-name">Загрузка...</span>
+                        <span class="user-status">В сети</span>
+                    </div>
+                    <button id="logout-btn" class="icon-btn" title="Выйти">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                            <polyline points="16,17 21,12 16,7"/>
+                            <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                    </button>
+                </div>
+            </aside>
+            
+            <main class="chat-area">
+                <div class="no-chat-selected" id="no-chat-selected">
+                    <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                        <circle cx="60" cy="60" r="60" fill="#f0f0f0"/>
+                        <path d="M35 45C35 41.134 38.134 38 42 38H78C81.866 38 85 41.134 85 45V67C85 70.866 81.866 74 78 74H55L40 84V45Z" fill="#667eea" opacity="0.3"/>
+                        <path d="M40 50C40 46.134 43.134 43 47 43H83C86.866 43 90 46.134 90 50V72C90 75.866 86.866 79 83 79H60L45 89V50Z" fill="#667eea"/>
+                    </svg>
+                    <h3>Выберите чат</h3>
+                    <p>или начните новый разговор</p>
+                </div>
+                
+                <div class="chat-container" id="chat-container" style="display: none;">
+                    <div class="chat-header" id="chat-header">
+                        <button class="back-btn mobile-only" id="back-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                        </button>
+                        <div class="chat-avatar" id="chat-avatar">
+                            <span id="chat-initials">?</span>
+                        </div>
+                        <div class="chat-info">
+                            <h3 id="chat-name">Имя чата</h3>
+                            <span class="chat-status" id="chat-status">В сети</span>
+                        </div>
+                    </div>
+                    
+                    <div class="messages-container" id="messages-container">
+                        <!-- Сообщения будут добавлены через JS -->
+                    </div>
+                    
+                    <div class="message-input-container">
+                        <button class="icon-btn attach-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                            </svg>
+                        </button>
+                        <input type="text" id="message-input" placeholder="Напишите сообщение...">
+                        <button id="send-btn" class="send-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Модальное окно нового чата -->
+        <div class="modal" id="new-chat-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Новый чат</h3>
+                    <button class="close-modal" id="close-modal">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 6L6 18M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="search-users" placeholder="Поиск пользователей...">
+                    <div class="users-list" id="users-list">
+                        <!-- Пользователи будут добавлены через JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/config.js"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
