@@ -1,0 +1,262 @@
+'use client'
+
+import { useCallback, useEffect, useRef } from 'react'
+import { supabase, Chat, Message, User } from '@/lib/supabase'
+import { useStore } from '@/store/useStore'
+import { useAuth } from './useAuth'
+
+export function useChats() {
+  const { user } = useAuth()
+  const { chats, currentChat, messages, setChats, setCurrentChat, setMessages, addMessage, updateChat } = useStore()
+  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+
+  const loadChats = useCallback(async () => {
+    if (!user) return []
+
+    // Get chat memberships
+    const { data: memberships } = await supabase
+      .from('chat_members')
+      .select('chat_id')
+      .eq('user_id', user.id)
+
+    if (!memberships || memberships.length === 0) {
+      setChats([])
+      return []
+    }
+
+    const chatIds = memberships.map((m) => m.chat_id)
+
+    // Get chats
+    const { data: chatsData } = await supabase
+      .from('chats')
+      .select('*')
+      .in('id', chatIds)
+      .order('created_at', { ascending: false })
+
+    if (!chatsData) {
+      setChats([])
+      return []
+    }
+
+    // Enrich chats with members and last message
+    const enrichedChats: Chat[] = await Promise.all(
+      chatsData.map(async (chat) => {
+        // Get members
+        const { data: members } = await supabase
+          .from('chat_members')
+          .select('user_id')
+          .eq('chat_id', chat.id)
+
+        const memberIds = members?.map((m) => m.user_id) || []
+
+        const { data: users } = await supabase
+          .from('users')
+          .select('*')
+          .in('id', memberIds)
+
+        const otherUser = users?.find((u) => u.id !== user.id)
+
+        // Get last message
+        const { data: lastMessages } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('chat_id', chat.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        // Count unread
+        const { count: unreadCount } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('chat_id', chat.id)
+          .neq('sender_id', user.id)
+          .eq('is_read', false)
+
+        return {
+          ...chat,
+          members: users || [],
+          otherUser,
+          lastMessage: lastMessages?.[0],
+          unreadCount: unreadCount || 0,
+        }
+      })
+    )
+
+    // Sort by last message
+    enrichedChats.sort((a, b) => {
+      const aTime = a.lastMessage ? new Date(a.lastMessage.created_at).getTime() : new Date(a.created_at).getTime()
+      const bTime = b.lastMessage ? new Date(b.lastMessage.created_at).getTime() : new Date(b.created_at).getTime()
+      return bTime - aTime
+    })
+
+    setChats(enrichedChats)
+    return enrichedChats
+  }, [user, setChats])
+
+  const createChat = useCallback(async (otherUserId: string): Promise<Chat> => {
+    if (!user) throw new Error('Not authenticated')
+
+    // Check if chat already exists
+    const existingChat = chats.find(
+      (chat) => !chat.is_group && chat.otherUser?.id === otherUserId
+    )
+
+    if (existingChat) return existingChat
+
+    // Create new chat
+    const { data: newChat, error } = await supabase
+      .from('chats')
+      .insert({ is_group: false, created_by: user.id })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    // Add members
+    await supabase.from('chat_members').insert([
+      { chat_id: newChat.id, user_id: user.id },
+      { chat_id: newChat.id, user_id: otherUserId },
+    ])
+
+    await loadChats()
+
+    return chats.find((c) => c.id === newChat.id) || newChat
+  }, [user, chats, loadChats])
+
+  const loadMessages = useCallback(async (chatId: string) => {
+    const { data: messagesData } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true })
+      .limit(100)
+
+    if (!messagesData) {
+      setMessages([])
+      return []
+    }
+
+    // Get senders
+    const senderIds = [...new Set(messagesData.map((m) => m.sender_id))]
+    const { data: senders } = await supabase
+      .from('users')
+      .select('*')
+      .in('id', senderIds)
+
+    const sendersMap: Record<string, User> = {}
+    senders?.forEach((s) => (sendersMap[s.id] = s))
+
+    const enrichedMessages = messagesData.map((m) => ({
+      ...m,
+      sender: sendersMap[m.sender_id],
+    }))
+
+    setMessages(enrichedMessages)
+    return enrichedMessages
+  }, [setMessages])
+
+  const sendMessage = useCallback(async (chatId: string, content: string) => {
+    if (!user || !content.trim()) return null
+
+    const { data: newMessage, error } = await supabase
+      .from('messages')
+      .insert({
+        chat_id: chatId,
+        sender_id: user.id,
+        content: content.trim(),
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return newMessage
+  }, [user])
+
+  const markAsRead = useCallback(async (chatId: string) => {
+    if (!user) return
+
+    await supabase
+      .from('messages')
+      .update({ is_read: true })
+      .eq('chat_id', chatId)
+      .neq('sender_id', user.id)
+      .eq('is_read', false)
+
+    updateChat(chatId, { unreadCount: 0 })
+  }, [user, updateChat])
+
+  const subscribeToMessages = useCallback((chatId: string) => {
+    // Unsubscribe from previous
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe()
+    }
+
+    subscriptionRef.current = supabase
+      .channel(`messages:${chatId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_id=eq.${chatId}`,
+        },
+        async (payload) => {
+          const newMessage = payload.new as Message
+
+          // Get sender
+          const { data: sender } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', newMessage.sender_id)
+            .single()
+
+          addMessage({ ...newMessage, sender })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      subscriptionRef.current?.unsubscribe()
+    }
+  }, [addMessage])
+
+  const searchUsers = useCallback(async (query: string): Promise<User[]> => {
+    if (!user) return []
+
+    let queryBuilder = supabase
+      .from('users')
+      .select('*')
+      .neq('id', user.id)
+      .limit(20)
+
+    if (query) {
+      queryBuilder = queryBuilder.or(`username.ilike.%${query}%,first_name.ilike.%${query}%`)
+    }
+
+    const { data } = await queryBuilder.order('created_at', { ascending: false })
+    return data || []
+  }, [user])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      subscriptionRef.current?.unsubscribe()
+    }
+  }, [])
+
+  return {
+    chats,
+    currentChat,
+    messages,
+    setCurrentChat,
+    loadChats,
+    createChat,
+    loadMessages,
+    sendMessage,
+    markAsRead,
+    subscribeToMessages,
+    searchUsers,
+  }
+}
