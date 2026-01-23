@@ -189,11 +189,12 @@ export function useChats() {
   const subscribeToMessages = useCallback((chatId: string) => {
     // Unsubscribe from previous
     if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe()
+      supabase.removeChannel(subscriptionRef.current)
+      subscriptionRef.current = null
     }
 
-    subscriptionRef.current = supabase
-      .channel(`messages:${chatId}`)
+    const channel = supabase
+      .channel(`realtime-messages-${chatId}-${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -203,6 +204,7 @@ export function useChats() {
           filter: `chat_id=eq.${chatId}`,
         },
         async (payload) => {
+          console.log('New message received:', payload)
           const newMessage = payload.new as Message
 
           // Get sender
@@ -215,10 +217,17 @@ export function useChats() {
           addMessage({ ...newMessage, sender })
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status)
+      })
+
+    subscriptionRef.current = channel
 
     return () => {
-      subscriptionRef.current?.unsubscribe()
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current)
+        subscriptionRef.current = null
+      }
     }
   }, [addMessage])
 
@@ -242,7 +251,10 @@ export function useChats() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      subscriptionRef.current?.unsubscribe()
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current)
+        subscriptionRef.current = null
+      }
     }
   }, [])
 
