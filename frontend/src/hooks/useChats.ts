@@ -5,10 +5,14 @@ import { supabase, Chat, Message, User } from '@/lib/supabase'
 import { useStore } from '@/store/useStore'
 import { useAuth } from './useAuth'
 
+// Глобальная переменная для подписки (чтобы не пересоздавалась при каждом вызове хука)
+let globalSubscription: ReturnType<typeof supabase.channel> | null = null
+let currentSubscribedChatId: string | null = null
+
 export function useChats() {
   const { user } = useAuth()
-  const { chats, currentChat, messages, setChats, setCurrentChat, setMessages, addMessage, updateChat } = useStore()
-  const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const store = useStore()
+  const { chats, currentChat, messages, setChats, setCurrentChat, setMessages, addMessage, updateChat } = store
 
   const loadChats = useCallback(async () => {
     if (!user) return []
@@ -195,17 +199,27 @@ export function useChats() {
   }, [user, updateChat])
 
   const subscribeToMessages = useCallback((chatId: string) => {
+    // Если уже подписаны на этот чат - не переподписываемся
+    if (currentSubscribedChatId === chatId && globalSubscription) {
+      console.log('Already subscribed to chat:', chatId)
+      return () => {}
+    }
+
     console.log('Setting up realtime subscription for chat:', chatId)
     
     // Unsubscribe from previous
-    if (subscriptionRef.current) {
+    if (globalSubscription) {
       console.log('Removing previous subscription')
-      supabase.removeChannel(subscriptionRef.current)
-      subscriptionRef.current = null
+      supabase.removeChannel(globalSubscription)
+      globalSubscription = null
+      currentSubscribedChatId = null
     }
 
     const channelName = `messages-${chatId}-${Date.now()}`
     console.log('Creating channel:', channelName)
+
+    // Получаем текущий addMessage из store напрямую
+    const storeAddMessage = useStore.getState().addMessage
 
     const channel = supabase
       .channel(channelName)
@@ -230,7 +244,8 @@ export function useChats() {
               .eq('id', newMessage.sender_id)
               .single()
 
-            addMessage({ ...newMessage, sender })
+            console.log('Calling addMessage with:', newMessage.id)
+            storeAddMessage({ ...newMessage, sender })
           }
         }
       )
@@ -241,6 +256,7 @@ export function useChats() {
         }
         if (status === 'SUBSCRIBED') {
           console.log('✅ Successfully subscribed to realtime messages!')
+          currentSubscribedChatId = chatId
         }
         if (status === 'CHANNEL_ERROR') {
           console.error('❌ Channel error - check Supabase Realtime settings')
@@ -250,16 +266,17 @@ export function useChats() {
         }
       })
 
-    subscriptionRef.current = channel
+    globalSubscription = channel
 
     return () => {
       console.log('Cleaning up subscription')
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current)
-        subscriptionRef.current = null
+      if (globalSubscription) {
+        supabase.removeChannel(globalSubscription)
+        globalSubscription = null
+        currentSubscribedChatId = null
       }
     }
-  }, [addMessage])
+  }, [])
 
   const searchUsers = useCallback(async (query: string): Promise<User[]> => {
     if (!user) return []
@@ -278,15 +295,7 @@ export function useChats() {
     return data || []
   }, [user])
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current)
-        subscriptionRef.current = null
-      }
-    }
-  }, [])
+  // Cleanup on unmount - теперь не нужен, т.к. используем глобальные переменные
 
   return {
     chats,
