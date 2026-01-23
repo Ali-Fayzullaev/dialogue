@@ -187,43 +187,65 @@ export function useChats() {
   }, [user, updateChat])
 
   const subscribeToMessages = useCallback((chatId: string) => {
+    console.log('Setting up realtime subscription for chat:', chatId)
+    
     // Unsubscribe from previous
     if (subscriptionRef.current) {
+      console.log('Removing previous subscription')
       supabase.removeChannel(subscriptionRef.current)
       subscriptionRef.current = null
     }
 
+    const channelName = `messages-${chatId}-${Date.now()}`
+    console.log('Creating channel:', channelName)
+
     const channel = supabase
-      .channel(`realtime-messages-${chatId}-${Date.now()}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
           schema: 'public',
           table: 'messages',
           filter: `chat_id=eq.${chatId}`,
         },
         async (payload) => {
-          console.log('New message received:', payload)
-          const newMessage = payload.new as Message
+          console.log('Realtime event received:', payload.eventType, payload)
+          
+          if (payload.eventType === 'INSERT') {
+            const newMessage = payload.new as Message
 
-          // Get sender
-          const { data: sender } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', newMessage.sender_id)
-            .single()
+            // Get sender
+            const { data: sender } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', newMessage.sender_id)
+              .single()
 
-          addMessage({ ...newMessage, sender })
+            addMessage({ ...newMessage, sender })
+          }
         }
       )
-      .subscribe((status) => {
+      .subscribe((status, err) => {
         console.log('Realtime subscription status:', status)
+        if (err) {
+          console.error('Realtime subscription error:', err)
+        }
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to realtime messages!')
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Channel error - check Supabase Realtime settings')
+        }
+        if (status === 'TIMED_OUT') {
+          console.error('❌ Subscription timed out')
+        }
       })
 
     subscriptionRef.current = channel
 
     return () => {
+      console.log('Cleaning up subscription')
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current)
         subscriptionRef.current = null
