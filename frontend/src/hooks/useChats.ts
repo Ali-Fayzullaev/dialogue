@@ -162,6 +162,8 @@ export function useChats() {
   const sendMessage = useCallback(async (chatId: string, content: string) => {
     if (!user || !content.trim()) return null
 
+    console.log('📤 Sending message...')
+
     const { data: newMessage, error } = await supabase
       .from('messages')
       .insert({
@@ -172,18 +174,23 @@ export function useChats() {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('❌ Error sending message:', error)
+      throw error
+    }
 
-    // Сразу добавляем сообщение в локальный стейт с информацией о отправителе
+    console.log('📨 Message sent, adding to store:', newMessage?.id)
+
+    // Сразу добавляем сообщение в локальный стейт напрямую
     if (newMessage) {
-      addMessage({
+      useMessagesStore.getState().addMessage({
         ...newMessage,
         sender: user,
       })
     }
 
     return newMessage
-  }, [user, addMessage])
+  }, [user])
 
   const markAsRead = useCallback(async (chatId: string) => {
     if (!user) return
