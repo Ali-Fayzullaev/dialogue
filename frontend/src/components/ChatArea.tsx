@@ -20,11 +20,14 @@ export default function ChatArea({ chat, onBack }: ChatAreaProps) {
   const messages = useMessagesStore((state) => state.messages)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [, forceUpdate] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Отладка - смотрим когда messages меняются
   useEffect(() => {
-    console.log('🔄 Messages updated in ChatArea:', messages.length, messages)
+    console.log('🔄 Messages updated in ChatArea:', messages.length)
+    // Принудительный ререндер
+    forceUpdate(n => n + 1)
   }, [messages])
 
   useEffect(() => {
