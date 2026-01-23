@@ -49,9 +49,18 @@ export const useStore = create<AppState>()(
       // Messages
       messages: [],
       setMessages: (messages) => set({ messages }),
-      addMessage: (message) => set((state) => ({
-        messages: [...state.messages, message],
-      })),
+      addMessage: (message) => set((state) => {
+        // Проверяем на дубликаты по id
+        const exists = state.messages.some((m) => m.id === message.id)
+        if (exists) {
+          console.log('Message already exists, skipping:', message.id)
+          return state
+        }
+        console.log('Adding new message to state:', message.id)
+        return {
+          messages: [...state.messages, message],
+        }
+      }),
       
       // UI
       isMobileMenuOpen: false,

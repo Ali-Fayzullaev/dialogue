@@ -170,8 +170,16 @@ export function useChats() {
 
     if (error) throw error
 
+    // Сразу добавляем сообщение в локальный стейт с информацией о отправителе
+    if (newMessage) {
+      addMessage({
+        ...newMessage,
+        sender: user,
+      })
+    }
+
     return newMessage
-  }, [user])
+  }, [user, addMessage])
 
   const markAsRead = useCallback(async (chatId: string) => {
     if (!user) return
