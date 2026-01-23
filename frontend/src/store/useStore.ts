@@ -2,6 +2,35 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { User, Chat, Message } from '@/lib/supabase'
 
+// Отдельный store для сообщений БЕЗ persist - для реактивности
+interface MessagesState {
+  messages: Message[]
+  setMessages: (messages: Message[]) => void
+  addMessage: (message: Message) => void
+  clearMessages: () => void
+}
+
+export const useMessagesStore = create<MessagesState>((set, get) => ({
+  messages: [],
+  setMessages: (messages) => {
+    console.log('📝 setMessages called:', messages.length)
+    set({ messages })
+  },
+  addMessage: (message) => {
+    const state = get()
+    const exists = state.messages.some((m) => m.id === message.id)
+    if (exists) {
+      console.log('⚠️ Message already exists, skipping:', message.id)
+      return
+    }
+    console.log('✅ Adding new message to state:', message.id)
+    const newMessages = [...state.messages, message]
+    console.log('📊 New messages count:', newMessages.length)
+    set({ messages: newMessages })
+  },
+  clearMessages: () => set({ messages: [] }),
+}))
+
 interface AppState {
   // Auth
   user: User | null
@@ -16,11 +45,6 @@ interface AppState {
   setCurrentChat: (chat: Chat | null) => void
   updateChat: (chatId: string, updates: Partial<Chat>) => void
   
-  // Messages
-  messages: Message[]
-  setMessages: (messages: Message[]) => void
-  addMessage: (message: Message) => void
-  
   // UI
   isMobileMenuOpen: boolean
   setMobileMenuOpen: (open: boolean) => void
@@ -28,12 +52,15 @@ interface AppState {
 
 export const useStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Auth
       user: null,
       isAuthenticated: false,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
-      logout: () => set({ user: null, isAuthenticated: false, chats: [], messages: [], currentChat: null }),
+      logout: () => {
+        set({ user: null, isAuthenticated: false, chats: [], currentChat: null })
+        useMessagesStore.getState().clearMessages()
+      },
       
       // Chats
       chats: [],
@@ -45,22 +72,6 @@ export const useStore = create<AppState>()(
           chat.id === chatId ? { ...chat, ...updates } : chat
         ),
       })),
-      
-      // Messages
-      messages: [],
-      setMessages: (messages) => set({ messages }),
-      addMessage: (message) => set((state) => {
-        // Проверяем на дубликаты по id
-        const exists = state.messages.some((m) => m.id === message.id)
-        if (exists) {
-          console.log('Message already exists, skipping:', message.id)
-          return state
-        }
-        console.log('Adding new message to state:', message.id)
-        return {
-          messages: [...state.messages, message],
-        }
-      }),
       
       // UI
       isMobileMenuOpen: false,

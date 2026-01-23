@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Send, Paperclip, MessageCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useChats } from '@/hooks/useChats'
-import { useStore } from '@/store/useStore'
+import { useMessagesStore } from '@/store/useStore'
 import { Chat } from '@/lib/supabase'
 import { formatTime, formatDate, isSameDay } from '@/lib/utils'
 
@@ -16,11 +16,16 @@ interface ChatAreaProps {
 export default function ChatArea({ chat, onBack }: ChatAreaProps) {
   const { user, getDisplayName, getInitials } = useAuth()
   const { loadMessages, sendMessage, markAsRead, subscribeToMessages } = useChats()
-  // Берём messages напрямую из store для реактивности
-  const messages = useStore((state) => state.messages)
+  // Берём messages напрямую из отдельного store для реактивности
+  const messages = useMessagesStore((state) => state.messages)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Отладка - смотрим когда messages меняются
+  useEffect(() => {
+    console.log('🔄 Messages updated in ChatArea:', messages.length, messages)
+  }, [messages])
 
   useEffect(() => {
     if (chat) {

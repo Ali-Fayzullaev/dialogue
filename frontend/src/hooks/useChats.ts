@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { supabase, Chat, Message, User } from '@/lib/supabase'
-import { useStore } from '@/store/useStore'
+import { useStore, useMessagesStore } from '@/store/useStore'
 import { useAuth } from './useAuth'
 
 // Глобальная переменная для подписки (чтобы не пересоздавалась при каждом вызове хука)
@@ -11,8 +11,8 @@ let currentSubscribedChatId: string | null = null
 
 export function useChats() {
   const { user } = useAuth()
-  const store = useStore()
-  const { chats, currentChat, messages, setChats, setCurrentChat, setMessages, addMessage, updateChat } = store
+  const { chats, currentChat, setChats, setCurrentChat, updateChat } = useStore()
+  const { messages, setMessages, addMessage } = useMessagesStore()
 
   const loadChats = useCallback(async () => {
     if (!user) return []
@@ -218,8 +218,8 @@ export function useChats() {
     const channelName = `messages-${chatId}-${Date.now()}`
     console.log('Creating channel:', channelName)
 
-    // Получаем текущий addMessage из store напрямую
-    const storeAddMessage = useStore.getState().addMessage
+    // Получаем addMessage из messages store напрямую
+    const storeAddMessage = useMessagesStore.getState().addMessage
 
     const channel = supabase
       .channel(channelName)
